@@ -7,6 +7,10 @@ on:
       - '.github/workflows/auth-service.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -37,7 +41,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.CR_PAT != '' && secrets.CR_PAT || secrets.GITHUB_TOKEN }}
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
