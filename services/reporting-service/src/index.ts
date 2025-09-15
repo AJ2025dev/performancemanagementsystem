@@ -1,12 +1,12 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { Application } from 'express';
 import morgan from 'morgan';
 import cors from 'cors';
 import { ApolloServer } from 'apollo-server-express';
 import { gql } from 'apollo-server-express';
 import { Pool } from 'pg';
 
-export const app = express();
+export const app: Application = express();
 app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
@@ -58,7 +58,8 @@ const resolvers = {
 async function start() {
   const server = new ApolloServer({ typeDefs, resolvers });
   await server.start();
-  server.applyMiddleware({ app, path: '/graphql' });
+  // Cast to any to avoid type version mismatch between apollo-server-express and express types
+  server.applyMiddleware({ app: app as any, path: '/graphql' });
   app.get('/health', (_req, res) => res.json({ ok: true }));
   app.listen(PORT, () => console.log(`Reporting service listening on :${PORT}`));
 }
