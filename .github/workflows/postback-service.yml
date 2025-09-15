@@ -19,6 +19,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
+      - name: Compute image tag (lowercase owner)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${GITHUB_REPOSITORY#*/}/${SERVICE}:sha-${GITHUB_SHA}" >> $GITHUB_ENV
       - name: Install deps
         working-directory: services/${{ env.SERVICE }}
         run: npm ci || npm install
