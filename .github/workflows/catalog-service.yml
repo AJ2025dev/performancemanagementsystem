@@ -21,7 +21,7 @@ jobs:
         with: { node-version: '20' }
       - name: Install deps
         working-directory: services/${{ env.SERVICE }}
-        run: npm ci
+        run: npm ci || npm install
       - name: Test
         working-directory: services/${{ env.SERVICE }}
         run: npm test -- --ci --passWithNoTests
@@ -46,3 +46,9 @@ jobs:
       - name: Deploy
         if: ${{ env.KUBE_CONFIG_BASE64 != '' }}
         run: kubectl --kubeconfig kubeconfig -n $NAMESPACE set image deploy/catalog-service catalog-service=${{ env.IMAGE }}
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.6'
+      - name: Print deploy context
+        run: echo "Ref=$GITHUB_REF Namespace=$NAMESPACE"
