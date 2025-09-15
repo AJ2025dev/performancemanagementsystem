@@ -14,6 +14,7 @@ jobs:
       SERVICE: catalog-service
       IMAGE: ghcr.io/${{ github.repository }}/catalog-service:sha-${{ github.sha }}
       NAMESPACE: ${{ startsWith(github.ref, 'refs/heads/staging') && 'affnet-staging' || 'affnet' }}
+      KUBE_CONFIG_BASE64: ${{ secrets.KUBE_CONFIG_BASE64 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,10 +41,8 @@ jobs:
           push: true
           tags: ${{ env.IMAGE }}
       - name: Set Kubeconfig
-        if: ${{ secrets.KUBE_CONFIG_BASE64 != '' }}
+        if: ${{ env.KUBE_CONFIG_BASE64 != '' }}
         run: echo "${KUBE_CONFIG_BASE64}" | base64 -d > kubeconfig
-        env:
-          KUBE_CONFIG_BASE64: ${{ secrets.KUBE_CONFIG_BASE64 }}
       - name: Deploy
-        if: ${{ secrets.KUBE_CONFIG_BASE64 != '' }}
+        if: ${{ env.KUBE_CONFIG_BASE64 != '' }}
         run: kubectl --kubeconfig kubeconfig -n $NAMESPACE set image deploy/catalog-service catalog-service=${{ env.IMAGE }}
