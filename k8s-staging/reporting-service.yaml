@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reporting-service
+  namespace: affnet-staging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reporting-service
+  template:
+    metadata:
+      labels:
+        app: reporting-service
+    spec:
+      containers:
+        - name: reporting-service
+          image: ghcr.io/your-org/reporting-service:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: affnet-secrets, key: POSTGRES_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: affnet-secrets, key: POSTGRES_PASSWORD } }
+          envFrom:
+            - configMapRef: { name: affnet-env }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "400m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reporting-service
+  namespace: affnet-staging
+spec:
+  type: ClusterIP
+  selector:
+    app: reporting-service
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+

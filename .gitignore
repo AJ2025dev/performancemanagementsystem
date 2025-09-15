@@ -1,0 +1,11 @@
+node_modules
+dist
+.DS_Store
+.env
+coverage
+/.turbo
+/.next
+apps/web/.next
+apps/web/out
+**/package-lock.json
+

@@ -1,0 +1,228 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: affnet-postgres
+    environment:
+      POSTGRES_USER: affnet
+      POSTGRES_PASSWORD: affnetpass
+      POSTGRES_DB: affnet
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U affnet -d affnet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: bitnami/redis:7.2
+    container_name: affnet-redis
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/bitnami/redis/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    container_name: affnet-zookeeper
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/bitnami/zookeeper
+    restart: unless-stopped
+
+  kafka:
+    image: bitnami/kafka:3.6
+    container_name: affnet-kafka
+    environment:
+      - KAFKA_CFG_PROCESS_ROLES=broker
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_NUM_PARTITIONS=3
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    restart: unless-stopped
+
+  auth-service:
+    build: ./services/auth-service
+    container_name: affnet-auth
+    environment:
+      NODE_ENV: production
+      JWT_SECRET: supersecretjwt
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: affnet
+      POSTGRES_USER: affnet
+      POSTGRES_PASSWORD: affnetpass
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  click-service:
+    build: ./services/click-service
+    container_name: affnet-click
+    environment:
+      NODE_ENV: production
+      KAFKA_BROKERS: kafka:9092
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - kafka
+      - redis
+    restart: unless-stopped
+
+  conversion-service:
+    build: ./services/conversion-service
+    container_name: affnet-conversion
+    environment:
+      NODE_ENV: production
+      KAFKA_BROKERS: kafka:9092
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: affnet
+      POSTGRES_USER: affnet
+      POSTGRES_PASSWORD: affnetpass
+    depends_on:
+      - kafka
+      - postgres
+    restart: unless-stopped
+
+  postback-service:
+    build: ./services/postback-service
+    container_name: affnet-postback
+    environment:
+      NODE_ENV: production
+      KAFKA_BROKERS: kafka:9092
+      DEFAULT_POSTBACK_URL: ""
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
+  media-buy-service:
+    build: ./services/media-buy-service
+    container_name: affnet-media
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+  ai-tools-service:
+    build: ./services/ai-tools-service
+    container_name: affnet-ai
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+  reporting-service:
+    build: ./services/reporting-service
+    container_name: affnet-reporting
+    environment:
+      NODE_ENV: production
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: affnet
+      POSTGRES_USER: affnet
+      POSTGRES_PASSWORD: affnetpass
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  catalog-service:
+    build: ./services/catalog-service
+    container_name: affnet-catalog
+    environment:
+      NODE_ENV: production
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: affnet
+      POSTGRES_USER: affnet
+      POSTGRES_PASSWORD: affnetpass
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: affnet-gateway
+    environment:
+      NODE_ENV: production
+      JWT_SECRET: supersecretjwt
+      AUTH_SERVICE_URL: http://auth-service:3000
+      CLICK_SERVICE_URL: http://click-service:3000
+      CONVERSION_SERVICE_URL: http://conversion-service:3000
+      POSTBACK_SERVICE_URL: http://postback-service:3000
+      MEDIA_BUY_SERVICE_URL: http://media-buy-service:3000
+      AI_TOOLS_SERVICE_URL: http://ai-tools-service:3000
+      REPORTING_SERVICE_URL: http://reporting-service:3000
+      CATALOG_SERVICE_URL: http://catalog-service:3000
+    depends_on:
+      - auth-service
+      - click-service
+      - conversion-service
+      - postback-service
+      - media-buy-service
+      - ai-tools-service
+      - reporting-service
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  # Production Next.js web (profile: prod)
+  web:
+    build: ./apps/web
+    container_name: affnet-web
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_GATEWAY_URL: http://localhost:3000
+    depends_on:
+      - api-gateway
+    ports:
+      - "4000:4000"
+    profiles: ["prod"]
+
+  # Dev Next.js web with hot reload (profile: dev)
+  web-dev:
+    image: node:20-alpine
+    container_name: affnet-web-dev
+    working_dir: /app
+    environment:
+      NEXT_PUBLIC_GATEWAY_URL: http://localhost:3000
+    volumes:
+      - ./apps/web:/app
+    command: sh -c "npm ci && npm run dev"
+    depends_on:
+      - api-gateway
+    ports:
+      - "4001:4000"
+    profiles: ["dev"]
+
+volumes:
+  db_data:
+  redis_data:
+  zookeeper_data:
+  kafka_data:

@@ -1,0 +1,49 @@
+name: reporting-service CI/CD
+
+on:
+  push:
+    paths:
+      - 'services/reporting-service/**'
+      - '.github/workflows/reporting-service.yml'
+  workflow_dispatch:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      SERVICE: reporting-service
+      IMAGE: ghcr.io/${{ github.repository }}/reporting-service:sha-${{ github.sha }}
+      NAMESPACE: ${{ startsWith(github.ref, 'refs/heads/staging') && 'affnet-staging' || 'affnet' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install deps
+        working-directory: services/${{ env.SERVICE }}
+        run: npm ci
+      - name: Test
+        working-directory: services/${{ env.SERVICE }}
+        run: npm test -- --ci --passWithNoTests
+      - name: Build
+        working-directory: services/${{ env.SERVICE }}
+        run: npm run build
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: services/${{ env.SERVICE }}
+          push: true
+          tags: ${{ env.IMAGE }}
+      - name: Set Kubeconfig
+        if: ${{ secrets.KUBE_CONFIG_BASE64 != '' }}
+        run: echo "${KUBE_CONFIG_BASE64}" | base64 -d > kubeconfig
+        env:
+          KUBE_CONFIG_BASE64: ${{ secrets.KUBE_CONFIG_BASE64 }}
+      - name: Deploy
+        if: ${{ secrets.KUBE_CONFIG_BASE64 != '' }}
+        run: kubectl --kubeconfig kubeconfig -n $NAMESPACE set image deploy/reporting-service reporting-service=${{ env.IMAGE }}

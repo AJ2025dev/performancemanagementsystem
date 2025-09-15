@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conversion-service
+  namespace: affnet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: conversion-service
+  template:
+    metadata:
+      labels:
+        app: conversion-service
+    spec:
+      containers:
+        - name: conversion-service
+          image: ghcr.io/your-org/conversion-service:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: affnet-secrets, key: POSTGRES_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: affnet-secrets, key: POSTGRES_PASSWORD } }
+          envFrom:
+            - configMapRef: { name: affnet-env }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "400m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: conversion-service
+  namespace: affnet
+spec:
+  type: ClusterIP
+  selector:
+    app: conversion-service
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+

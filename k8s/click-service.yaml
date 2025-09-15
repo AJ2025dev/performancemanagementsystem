@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: click-service
+  namespace: affnet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: click-service
+  template:
+    metadata:
+      labels:
+        app: click-service
+    spec:
+      containers:
+        - name: click-service
+          image: ghcr.io/your-org/click-service:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: affnet-secrets, key: REDIS_PASSWORD } }
+          envFrom:
+            - configMapRef: { name: affnet-env }
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "300m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: click-service
+  namespace: affnet
+spec:
+  type: ClusterIP
+  selector:
+    app: click-service
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+

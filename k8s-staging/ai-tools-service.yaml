@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-tools-service
+  namespace: affnet-staging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-tools-service
+  template:
+    metadata:
+      labels:
+        app: ai-tools-service
+    spec:
+      containers:
+        - name: ai-tools-service
+          image: ghcr.io/your-org/ai-tools-service:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef: { name: affnet-env }
+            - secretRef: { name: affnet-secrets }
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "300m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-tools-service
+  namespace: affnet-staging
+spec:
+  type: ClusterIP
+  selector:
+    app: ai-tools-service
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+
