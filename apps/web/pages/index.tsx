@@ -12,6 +12,7 @@ export default function Home() {
           <li><a href="/track">Track Demo</a></li>
           <li><a href="/offers">Offers</a></li>
           <li><a href="/affiliates">Affiliates</a></li>
+          <li><a href="/users">Users</a></li>
         </ul>
       </section>
     </main>

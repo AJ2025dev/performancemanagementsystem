@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiFetch, getAuthToken } from '@/lib/api';
+import { useToast } from '@/components/Toast';
 
 export default function Offers() {
   const [items, setItems] = useState<any[]>([]);
@@ -8,6 +9,7 @@ export default function Offers() {
   const [payout, setPayout] = useState(10);
   const [postback, setPostback] = useState('');
   const [msg, setMsg] = useState('');
+  const { push } = useToast();
 
   async function load() {
     const rows = await apiFetch('/catalog/offers');
@@ -17,9 +19,9 @@ export default function Offers() {
   async function create() {
     try {
       await apiFetch('/admin/catalog/offers', { method: 'POST', body: JSON.stringify({ name, advertiser, payout, postback_template: postback }) });
-      setMsg('Offer created');
+      setMsg('Offer created'); push('Offer created','success');
       load();
-    } catch (e: any) { setMsg(e.message); }
+    } catch (e: any) { setMsg(e.message); push('Failed to create offer','error'); }
   }
 
   useEffect(() => { load().catch(() => setItems([])); }, []);
@@ -31,7 +33,7 @@ export default function Offers() {
       <h1>Offers</h1>
       {!items.length ? <p>No offers</p> : (
         <table>
-          <thead><tr><th>Name</th><th>Advertiser</th><th>Payout</th><th>Created</th><th>Summary</th></tr></thead>
+          <thead><tr><th>Name</th><th>Advertiser</th><th>Payout</th><th>Created</th><th>Summary</th><th>Actions</th></tr></thead>
           <tbody>
             {items.map(o => (
               <tr key={o.id}>
@@ -40,6 +42,7 @@ export default function Offers() {
                 <td>${o.payout}</td>
                 <td>{new Date(o.created_at).toLocaleString()}</td>
                 <td><a href={`/dashboard?offerId=${o.id}&days=14`}>View summary</a></td>
+                <td><button onClick={async ()=>{ try { await apiFetch(`/admin/catalog/offers/${o.id}`, { method: 'DELETE' }); push('Offer deleted','success'); } catch { push('Failed to delete offer','error'); } load(); }}>Delete</button></td>
               </tr>
             ))}
           </tbody>
