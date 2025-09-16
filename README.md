@@ -119,6 +119,14 @@ Common tasks are wrapped in a Makefile:
 - The gateway expects JWTs from `auth-service` for protected routes. Public routes under `/auth/*` are open.
 - Adjust Helm values in Terraform variables for production storage classes and replica counts.
 
+## Supabase + Vercel Integration
+- The frontend can use Supabase Auth if `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are provided.
+- `/login` will prefer Supabase when configured; otherwise it falls back to the gateway `/auth/*`.
+- For Vercel, set Root Directory to `apps/web`.
+- You may either:
+  - Set `NEXT_PUBLIC_GATEWAY_URL` to your gateway host, or
+  - Use `vercel.json` rewrites to proxy API paths to your gateway host (we added rewrites to `https://performance.audiencestreet.ai`).
+
 ## Next Steps
 - Add persistent user/offer/affiliate CRUD UIs in the web app.
 - Harden services (validation, schemas, observability, tracing).

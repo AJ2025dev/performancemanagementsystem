@@ -7,6 +7,10 @@ on:
       - '.github/workflows/conversion-service.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -14,13 +18,16 @@ jobs:
       SERVICE: conversion-service
       IMAGE: ghcr.io/${{ github.repository }}/conversion-service:sha-${{ github.sha }}
       NAMESPACE: ${{ startsWith(github.ref, 'refs/heads/staging') && 'affnet-staging' || 'affnet' }}
+      KUBE_CONFIG_BASE64: ${{ secrets.KUBE_CONFIG_BASE64 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
+      - name: Compute image tag (lowercase owner)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${GITHUB_REPOSITORY#*/}/${SERVICE}:sha-${GITHUB_SHA}" >> $GITHUB_ENV
       - name: Install deps
         working-directory: services/${{ env.SERVICE }}
-        run: npm ci
+        run: npm ci || npm install
       - name: Test
         working-directory: services/${{ env.SERVICE }}
         run: npm test -- --ci --passWithNoTests
@@ -32,7 +39,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.CR_PAT != '' && secrets.CR_PAT || secrets.GITHUB_TOKEN }}
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
@@ -40,10 +47,14 @@ jobs:
           push: true
           tags: ${{ env.IMAGE }}
       - name: Set Kubeconfig
-        if: ${{ secrets.KUBE_CONFIG_BASE64 != '' }}
+        if: ${{ env.KUBE_CONFIG_BASE64 != '' }}
         run: echo "${KUBE_CONFIG_BASE64}" | base64 -d > kubeconfig
-        env:
-          KUBE_CONFIG_BASE64: ${{ secrets.KUBE_CONFIG_BASE64 }}
       - name: Deploy
-        if: ${{ secrets.KUBE_CONFIG_BASE64 != '' }}
+        if: ${{ env.KUBE_CONFIG_BASE64 != '' }}
         run: kubectl --kubeconfig kubeconfig -n $NAMESPACE set image deploy/conversion-service conversion-service=${{ env.IMAGE }}
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.6'
+      - name: Print deploy context
+        run: echo "Ref=$GITHUB_REF Namespace=$NAMESPACE"

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { apiFetch, getAuthToken } from '@/lib/api';
+import { useToast } from '@/components/Toast';
 
 export default function Affiliates() {
   const [items, setItems] = useState<any[]>([]);
   const [name, setName] = useState('Affiliate X');
   const [email, setEmail] = useState('aff@example.com');
   const [msg, setMsg] = useState('');
+  const { push } = useToast();
 
   async function load() {
     const rows = await apiFetch('/catalog/affiliates');
@@ -15,9 +17,9 @@ export default function Affiliates() {
   async function create() {
     try {
       await apiFetch('/admin/catalog/affiliates', { method: 'POST', body: JSON.stringify({ name, contact_email: email }) });
-      setMsg('Affiliate created');
+      setMsg('Affiliate created'); push('Affiliate created','success');
       load();
-    } catch (e: any) { setMsg(e.message); }
+    } catch (e: any) { setMsg(e.message); push('Failed to create affiliate','error'); }
   }
 
   useEffect(() => { load().catch(() => setItems([])); }, []);
@@ -28,7 +30,7 @@ export default function Affiliates() {
       <h1>Affiliates</h1>
       {!items.length ? <p>No affiliates</p> : (
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Created</th><th>Summary</th></tr></thead>
+          <thead><tr><th>Name</th><th>Email</th><th>Created</th><th>Summary</th><th>Actions</th></tr></thead>
           <tbody>
             {items.map(a => (
               <tr key={a.id}>
@@ -36,6 +38,7 @@ export default function Affiliates() {
                 <td>{a.contact_email}</td>
                 <td>{new Date(a.created_at).toLocaleString()}</td>
                 <td><a href={`/dashboard?affiliateId=${a.id}&days=14`}>View summary</a></td>
+                <td><button onClick={async ()=>{ try { await apiFetch(`/admin/catalog/affiliates/${a.id}`, { method: 'DELETE' }); push('Affiliate deleted','success'); } catch { push('Failed to delete affiliate','error'); } load(); }}>Delete</button></td>
               </tr>
             ))}
           </tbody>

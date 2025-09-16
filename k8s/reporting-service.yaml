@@ -18,6 +18,18 @@ spec:
           image: ghcr.io/your-org/reporting-service:latest
           ports:
             - containerPort: 3000
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
           env:
             - name: POSTGRES_USER
               valueFrom: { secretKeyRef: { name: affnet-secrets, key: POSTGRES_USER } }
@@ -34,6 +46,10 @@ kind: Service
 metadata:
   name: reporting-service
   namespace: affnet
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3000"
+    prometheus.io/path: "/metrics"
 spec:
   type: ClusterIP
   selector:
@@ -42,4 +58,3 @@ spec:
     - name: http
       port: 3000
       targetPort: 3000
-

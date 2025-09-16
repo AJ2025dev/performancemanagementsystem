@@ -5,6 +5,7 @@ import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { pool, initSchema } from './db.js';
+import { z } from 'zod';
 
 export const app = express();
 app.use(cors());
@@ -25,9 +26,10 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 
 // Signup (admin creates or public? allow both, default affiliate)
 app.post('/auth/signup', async (req, res) => {
-  const { email, password, role } = req.body as { email: string; password: string; role?: Role };
-  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
-  const r: Role = role ?? 'affiliate';
+  const body = z.object({ email: z.string().email(), password: z.string().min(6), role: z.enum(['admin','manager','affiliate']).optional() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: 'invalid body', details: body.error.flatten() });
+  const { email, password, role } = body.data;
+  const r: Role = (role as Role) ?? 'affiliate';
   const hash = await bcrypt.hash(password, 10);
   try {
     const { rows } = await pool.query(
@@ -45,8 +47,9 @@ app.post('/auth/signup', async (req, res) => {
 });
 
 app.post('/auth/login', async (req, res) => {
-  const { email, password } = req.body as { email: string; password: string };
-  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+  const body = z.object({ email: z.string().email(), password: z.string().min(6) }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: 'invalid body', details: body.error.flatten() });
+  const { email, password } = body.data;
   const { rows } = await pool.query('SELECT id, email, password_hash, role FROM users WHERE email=$1', [email]);
   const user = rows[0];
   if (!user) return res.status(401).json({ error: 'invalid credentials' });
@@ -89,8 +92,9 @@ app.get('/users', requireAuth, requireRole(['admin']), async (_req, res) => {
 });
 
 app.post('/users', requireAuth, requireRole(['admin']), async (req, res) => {
-  const { email, password, role } = req.body as { email: string; password: string; role: Role };
-  if (!email || !password || !role) return res.status(400).json({ error: 'email, password, role required' });
+  const body = z.object({ email: z.string().email(), password: z.string().min(6), role: z.enum(['admin','manager','affiliate']) }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: 'invalid body', details: body.error.flatten() });
+  const { email, password, role } = body.data;
   const hash = await bcrypt.hash(password, 10);
   try {
     const { rows } = await pool.query(
@@ -115,3 +119,27 @@ if (process.env.NODE_ENV !== 'test') {
     .then(() => app.listen(PORT, () => console.log(`Auth service listening on :${PORT}`)))
     .catch((e) => { console.error('Failed to init schema', e); process.exit(1); });
 }
+app.put('/users/:id', requireAuth, requireRole(['admin']), async (req, res) => {
+  const body = z.object({ role: z.enum(['admin','manager','affiliate']).optional(), password: z.string().min(6).optional() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: 'invalid body', details: body.error.flatten() });
+  const { role, password } = body.data;
+  const { id } = req.params as any;
+  try {
+    if (password) {
+      const hash = await bcrypt.hash(password, 10);
+      await pool.query('UPDATE users SET password_hash=$2 WHERE id=$1', [id, hash]);
+    }
+    if (role) {
+      await pool.query('UPDATE users SET role=$2 WHERE id=$1', [id, role]);
+    }
+    const { rows } = await pool.query('SELECT id, email, role, created_at FROM users WHERE id=$1', [id]);
+    if (!rows[0]) return res.status(404).json({ error: 'not found' });
+    res.json(rows[0]);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'server error' }); }
+});
+
+app.delete('/users/:id', requireAuth, requireRole(['admin']), async (req, res) => {
+  const { id } = req.params as any;
+  await pool.query('DELETE FROM users WHERE id=$1', [id]);
+  res.status(204).end();
+});
