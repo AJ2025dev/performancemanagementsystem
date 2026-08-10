@@ -37,7 +37,7 @@ services:
     restart: unless-stopped
 
   zookeeper:
-    image: bitnami/zookeeper:3.9
+    image: soldevelo/zookeeper:3.9
     container_name: affnet-zookeeper
     environment:
       - ALLOW_ANONYMOUS_LOGIN=yes
